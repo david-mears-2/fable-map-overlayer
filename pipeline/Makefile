@@ -16,6 +16,7 @@ grid: venv
 
 layers: venv
 	$(PY) -m src.layers.parks
+	$(PY) -m src.layers.restaurants
 
 score: venv
 	$(PY) -m src.score

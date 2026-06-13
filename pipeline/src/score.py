@@ -26,6 +26,12 @@ LAYER_META = {
         "source": "OpenStreetMap (Geofabrik Greater London extract)",
         "rawUnit": "",
     },
+    "restaurants": {
+        "label": "Restaurants within 500 m",
+        "direction": "higher_better",
+        "source": "OpenStreetMap (Geofabrik Greater London extract)",
+        "rawUnit": "venues",
+    },
 }
 
 
@@ -79,9 +85,13 @@ def report_section(layer_id: str, meta: dict, raw: pd.Series, scores: pd.Series,
 
     fig, axes = plt.subplots(1, 2, figsize=(9, 3))
     raw.dropna().hist(bins=60, ax=axes[0], color="#31688e")
-    axes[0].set_title(f"raw ({meta['rawUnit'] or 'unitless'})")
+    axes[0].set_title("raw")
+    axes[0].set_xlabel(meta["rawUnit"] or "raw value")
     scores.dropna().hist(bins=60, ax=axes[1], color="#35b779")
     axes[1].set_title("score")
+    axes[1].set_xlabel("score (1 = desirable)")
+    for ax in axes:
+        ax.set_ylabel("cells")
     hist_b64 = fig_to_b64(fig)
 
     fig, ax = plt.subplots(figsize=(7, 5))
