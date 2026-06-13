@@ -10,10 +10,17 @@ OUTPUT = PIPELINE_DIR / "output"
 BNG = "EPSG:27700"
 WGS84 = "EPSG:4326"
 
+GEOFABRIK = "https://download.geofabrik.de/europe/united-kingdom/england/{}-latest.osm.pbf"
+
 PBF_PATH = CACHE / "greater-london-latest.osm.pbf"
 BOUNDARY_PATH = CACHE / "boundary.geojson"
 GRID_PATH = CACHE / "grid.parquet"
 LAYERS_DIR = CACHE / "layers"
+
+
+def region_pbf(region: str) -> Path:
+    """Local cache path for a Geofabrik England sub-region extract."""
+    return CACHE / f"{region}-latest.osm.pbf"
 
 
 def load_config() -> dict:

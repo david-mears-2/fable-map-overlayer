@@ -5,17 +5,19 @@ The log encodes diminishing returns in park size, the exponential rewards proxim
 continuously, and several nearby parks accumulate. Distance is to the park edge
 (zero inside), so large parks are not penalised by their own extent.
 """
+import geopandas as gpd
 import numpy as np
 import pandas as pd
 import shapely
 from shapely.strtree import STRtree
 
-from ..common import GRID_PATH, LAYERS_DIR, PBF_PATH, load_config
+from ..common import BNG, BOUNDARY_PATH, GRID_PATH, LAYERS_DIR, PBF_PATH, load_config, region_pbf
 from ..osm import extract_polygons
 
 
 def main() -> None:
-    cfg = load_config()["layers"]["parks"]
+    cfg_all = load_config()
+    cfg = cfg_all["layers"]["parks"]
     lam = cfg["decay_lambda_m"]
     cutoff = cfg["cutoff_distance_m"]
 
@@ -23,7 +25,14 @@ def main() -> None:
     cell = 250
     centres = shapely.points(grid.easting.values + cell / 2, grid.northing.values + cell / 2)
 
-    parks = extract_polygons(PBF_PATH, {"parks": cfg["include_tags"]})["parks"]
+    # Source green space from London plus bordering extracts so cells near the
+    # boundary see parks just outside London (within the gravity cutoff), not a
+    # data-blank edge. Parks beyond cutoff of London can reach no cell, so clip
+    # to a boundary buffer to keep the distance loop small.
+    pbfs = [PBF_PATH] + [region_pbf(r) for r in cfg_all["osm"]["buffer_regions"]]
+    parks = extract_polygons(pbfs, {"parks": cfg["include_tags"]}, cache_tag="_buffered")["parks"]
+    region = gpd.read_file(BOUNDARY_PATH).to_crs(BNG).union_all().buffer(cutoff)
+    parks = parks[parks.geometry.intersects(region)]
     parks = parks[parks.geometry.area >= cfg["min_area_m2"]]
     # ~10 m simplification: invisible against a 500 m decay, much cheaper distances.
     geoms = shapely.simplify(parks.geometry.values, 10)

@@ -67,18 +67,13 @@ def main() -> None:
     cells = build_cells(boundary, cell)
     print(f"grid: {len(cells)} cells inside Greater London")
 
-    # Request the parks group too: one OSM parse serves both this stage and the layer.
-    groups = extract_polygons(
-        PBF_PATH,
-        {
-            "nonres": cfg["grid"]["non_residential"]["tags"],
-            "parks": cfg["layers"]["parks"]["include_tags"],
-        },
-    )
+    # Cells lie wholly within London and Geofabrik includes boundary-straddling
+    # polygons whole, so the residential flag needs only the London extract.
+    nonres = extract_polygons(PBF_PATH, {"nonres": cfg["grid"]["non_residential"]["tags"]})["nonres"]
     # Spec §3: flag cells with no housing stock — only cells completely covered
     # by non-residential land use are excluded.
     threshold = cfg["grid"]["non_residential"]["coverage_threshold"]
-    nonres_cov = coverage(cells, groups["nonres"], cell)
+    nonres_cov = coverage(cells, nonres, cell)
     cells["residential"] = nonres_cov < threshold
     cells["nonres_coverage"] = np.round(nonres_cov, 3)  # kept for debugging
     print(

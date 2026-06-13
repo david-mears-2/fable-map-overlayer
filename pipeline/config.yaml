@@ -1,4 +1,13 @@
 # Pipeline configuration (spec §9). Layers absent from `layers:` are not built.
+
+# OSM extracts. The Greater London extract is clipped to the boundary, so green
+# space just outside London is absent and edge cells undercount park access. The
+# bordering England sub-region extracts below are unioned in for green-space layers
+# so the 3 km gravity cutoff beyond the boundary is covered on every side.
+osm:
+  primary_region: greater-london
+  buffer_regions: [surrey, kent, essex, hertfordshire, buckinghamshire]
+
 grid:
   cell_size_m: 250
   non_residential:
@@ -29,7 +38,8 @@ layers:
     min_area_m2: 2000         # drop slivers (verges, roundabout greens)
     include_tags:
       leisure: [park, recreation_ground, nature_reserve, common]
-      landuse: [recreation_ground, village_green]
+      landuse: [recreation_ground, village_green, forest]
+      natural: [wood, heath]   # accessible woodland/heath (Epping, Hampstead Heath)
     cutoffs: {percentile: [2, 98]}
 
 validation:

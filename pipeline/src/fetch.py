@@ -1,9 +1,7 @@
-"""Stage 1: download source data (spec §9). Parks slice: OSM extract + boundary."""
+"""Stage 1: download source data (spec §9). Parks slice: OSM extracts + boundary."""
 import json
 
-from .common import BOUNDARY_PATH, CACHE, PBF_PATH, download
-
-PBF_URL = "https://download.geofabrik.de/europe/united-kingdom/england/greater-london-latest.osm.pbf"
+from .common import BOUNDARY_PATH, CACHE, GEOFABRIK, PBF_PATH, download, load_config, region_pbf
 
 # ONS Open Geography Portal: Regions (December 2024), full-resolution clipped (BFC).
 BOUNDARY_URL = (
@@ -14,9 +12,16 @@ BOUNDARY_URL = (
 
 
 def main() -> None:
+    cfg = load_config()
     CACHE.mkdir(exist_ok=True)
+
     print("fetch: Greater London OSM extract (Geofabrik)")
-    download(PBF_URL, PBF_PATH)
+    download(GEOFABRIK.format(cfg["osm"]["primary_region"]), PBF_PATH)
+
+    print("fetch: bordering extracts for the green-space buffer")
+    for region in cfg["osm"]["buffer_regions"]:
+        download(GEOFABRIK.format(region), region_pbf(region))
+
     print("fetch: Greater London boundary (ONS Open Geography)")
     download(BOUNDARY_URL, BOUNDARY_PATH)
 

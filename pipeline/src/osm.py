@@ -6,6 +6,8 @@ The parse is the expensive step — two passes for multipolygon assembly — so
 callers request every group they need in one call; cached groups are never
 re-parsed.
 """
+from pathlib import Path
+
 import osmium
 import osmium.geom
 import shapely
@@ -23,7 +25,9 @@ class _AreaCollector(osmium.SimpleHandler):
             name: {k: set(vs) for k, vs in tags.items()} for name, tags in groups.items()
         }
         self.wkb_factory = osmium.geom.WKBFactory()
-        self.collected: dict[str, list[tuple[bytes, str]]] = {n: [] for n in groups}
+        # group -> list of (osm area id, wkb, tag); the id lets callers dedupe a
+        # polygon that appears in more than one extract (see extract_polygons).
+        self.collected: dict[str, list[tuple[int, bytes, str]]] = {n: [] for n in groups}
 
     def area(self, a: osmium.osm.Area) -> None:
         matched = []
@@ -40,7 +44,7 @@ class _AreaCollector(osmium.SimpleHandler):
         except RuntimeError:
             return  # broken multipolygon in source data — skip
         for name, tag in matched:
-            self.collected[name].append((wkb, tag))
+            self.collected[name].append((a.id, wkb, tag))
 
 
 class _PointCollector(osmium.SimpleHandler):
@@ -101,18 +105,35 @@ def extract_points(pbf_path, groups: TagGroups) -> dict[str, gpd.GeoDataFrame]:
     return {name: gpd.read_parquet(path) for name, path in paths.items()}
 
 
-def extract_polygons(pbf_path, groups: TagGroups) -> dict[str, gpd.GeoDataFrame]:
-    paths = {name: CACHE / f"osm_{name}.parquet" for name in groups}
+def extract_polygons(pbf_paths, groups: TagGroups, cache_tag: str = "") -> dict[str, gpd.GeoDataFrame]:
+    """Extract tagged polygons from one or more PBF extracts.
+
+    `pbf_paths` may be a single path or a list. When several extracts are given
+    (e.g. London plus bordering counties for the green-space buffer), polygons are
+    deduped by OSM id: Geofabrik includes a boundary-straddling polygon whole in
+    every region it touches, so the same park can appear in multiple files.
+    `cache_tag` distinguishes the cache file when a group is extracted with a
+    different set of inputs (the buffered parks vs. a London-only build).
+    """
+    if isinstance(pbf_paths, (str, Path)):
+        pbf_paths = [pbf_paths]
+
+    paths = {name: CACHE / f"osm_{name}{cache_tag}.parquet" for name in groups}
     missing = {name: tags for name, tags in groups.items() if not paths[name].exists()}
 
     if missing:
-        print(f"osm: parsing {pbf_path.name} for groups: {', '.join(missing)}")
-        collector = _AreaCollector(missing)
-        collector.apply_file(str(pbf_path), locations=True)
-        for name, rows in collector.collected.items():
-            geoms = shapely.from_wkb([wkb for wkb, _ in rows])
+        collected: dict[str, dict[int, tuple[bytes, str]]] = {n: {} for n in missing}
+        for pbf in pbf_paths:
+            print(f"osm: parsing {pbf.name} for groups: {', '.join(missing)}")
+            collector = _AreaCollector(missing)
+            collector.apply_file(str(pbf), locations=True)
+            for name, rows in collector.collected.items():
+                for oid, wkb, tag in rows:
+                    collected[name].setdefault(oid, (wkb, tag))
+        for name, items in collected.items():
+            geoms = shapely.from_wkb([wkb for wkb, _ in items.values()])
             gdf = gpd.GeoDataFrame(
-                {"tag": [tag for _, tag in rows]}, geometry=geoms, crs=WGS84
+                {"tag": [tag for _, tag in items.values()]}, geometry=geoms, crs=WGS84
             ).to_crs(BNG)
             gdf.to_parquet(paths[name])
             print(f"osm: {name}: {len(gdf)} polygons cached")
