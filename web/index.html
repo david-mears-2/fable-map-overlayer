@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>London Housing Heat Map</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='8' height='8' fill='%23440154'/%3E%3Crect x='8' width='8' height='8' fill='%2331688e'/%3E%3Crect y='8' width='8' height='8' fill='%2335b779'/%3E%3Crect x='8' y='8' width='8' height='8' fill='%23fde725'/%3E%3C/svg%3E"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,640&family=Spline+Sans+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="map"></div>
+
+    <header class="card" id="title-card">
+      <h1>London Housing<br />Heat&nbsp;Map</h1>
+      <p id="status">loading grid…</p>
+    </header>
+
+    <aside class="card" id="panel"></aside>
+
+    <aside class="card" id="legend">
+      <div id="legend-bar"></div>
+      <div class="legend-labels">
+        <span>less desirable</span>
+        <span>more desirable</span>
+      </div>
+      <p class="legend-note">composite percentile · bordered cells lack a layer</p>
+    </aside>
+
+    <div id="tooltip"></div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
