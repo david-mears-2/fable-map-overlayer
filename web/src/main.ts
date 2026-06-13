@@ -1,5 +1,6 @@
 import maplibregl from 'maplibre-gl';
 import type { ExpressionSpecification } from 'maplibre-gl';
+import proj4 from 'proj4';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import './style.css';
 import type { GridArtefact } from './types';
@@ -15,31 +16,46 @@ async function fetchGrid(): Promise<GridArtefact> {
   return res.json();
 }
 
-// Cells are true 250 m squares in BNG; the artefact ships only WGS84 centroids, so
-// reconstruct display quads from centroid + cell size. Grid convergence in London
-// is <1°, so the sub-metre mismatch with true cell edges is invisible at any zoom.
-function cellRing(lon: number, lat: number, sizeM: number): [number, number][] {
-  const halfLon = sizeM / 2 / (111320 * Math.cos((lat * Math.PI) / 180));
-  const halfLat = sizeM / 2 / 110540;
-  return [
-    [lon - halfLon, lat - halfLat],
-    [lon + halfLon, lat - halfLat],
-    [lon + halfLon, lat + halfLat],
-    [lon - halfLon, lat + halfLat],
-    [lon - halfLon, lat - halfLat],
-  ];
-}
+// EPSG:27700 (British National Grid) — must match the pipeline's compute CRS.
+const BNG =
+  '+proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 ' +
+  '+ellps=airy +towgs84=446.448,-125.157,542.06,0.15,0.247,0.842,-20.489 +units=m +no_defs';
+const bngToWgs = proj4(BNG, 'EPSG:4326');
 
+// Cell geometry comes from reprojecting the true BNG corners encoded in cellIds.
+// BNG grid north is rotated ~1.5° from true north across London (the grid's central
+// meridian is 2°W), so quads built axis-aligned in lat/lon stair-step and overlap.
+// Corners are shared between neighbouring cells, so memoizing the transform makes
+// adjacent quads reuse the identical vertex — the grid tiles with no gaps or overlaps.
 function buildGeoJSON(grid: GridArtefact): GeoJSON.FeatureCollection {
+  const size = grid.meta.cellSizeM;
+  const cache = new Map<string, [number, number]>();
+  const corner = (e: number, n: number): [number, number] => {
+    const key = `${e}_${n}`;
+    let c = cache.get(key);
+    if (!c) {
+      c = bngToWgs.forward([e, n]) as [number, number];
+      cache.set(key, c);
+    }
+    return c;
+  };
+
   return {
     type: 'FeatureCollection',
-    features: grid.cellIds.map((_, i) => {
-      const [lon, lat] = grid.centroids[i];
+    features: grid.cellIds.map((cellId, i) => {
+      const [e, n] = cellId.split('_').map(Number);
+      const ring = [
+        corner(e, n),
+        corner(e + size, n),
+        corner(e + size, n + size),
+        corner(e, n + size),
+        corner(e, n),
+      ];
       return {
         type: 'Feature',
         id: i,
         properties: { residential: grid.residential[i] },
-        geometry: { type: 'Polygon', coordinates: [cellRing(lon, lat, grid.meta.cellSizeM)] },
+        geometry: { type: 'Polygon', coordinates: [ring] },
       };
     }),
   };
