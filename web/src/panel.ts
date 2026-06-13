@@ -1,9 +1,11 @@
 import type { LayerMeta } from './types';
+import type { CompositionMode } from './scoring';
 
 export interface PanelState {
   weights: Record<string, number>; // slider positions in [0, 10], spec §7
   solo: string | null; // layer id whose solo toggle is active
   opacity: number; // global heat-layer fill-opacity in [0, 1], spec §8
+  mode: CompositionMode; // how per-layer scores combine into the composite
 }
 
 export interface PanelCallbacks {
@@ -17,6 +19,32 @@ export function buildPanel(
   state: PanelState,
   cb: PanelCallbacks
 ): void {
+  const modeHeading = document.createElement('h2');
+  modeHeading.textContent = 'combine layers by';
+  container.appendChild(modeHeading);
+
+  const modeRow = document.createElement('div');
+  modeRow.className = 'panel-row mode-row';
+  modeRow.innerHTML = `
+    <div class="mode-toggle" role="group" aria-label="Composition mode">
+      <button data-mode="mean" title="Weighted average — layers trade off freely">mean</button>
+      <button data-mode="product" title="Weighted geometric mean — a weak layer can't be compensated away">product</button>
+    </div>`;
+  const modeButtons = modeRow.querySelectorAll<HTMLButtonElement>('.mode-toggle button');
+  const refreshMode = () =>
+    modeButtons.forEach((b) => b.classList.toggle('active', b.dataset.mode === state.mode));
+  modeButtons.forEach((b) =>
+    b.addEventListener('click', () => {
+      const next = b.dataset.mode as CompositionMode;
+      if (next === state.mode) return;
+      state.mode = next;
+      refreshMode();
+      cb.onScoringChange();
+    })
+  );
+  container.appendChild(modeRow);
+  refreshMode();
+
   const heading = document.createElement('h2');
   heading.textContent = 'layer weights';
   container.appendChild(heading);

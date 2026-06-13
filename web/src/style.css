@@ -119,6 +119,44 @@ body,
   transition: opacity 0.18s ease;
 }
 
+/* ── composition-mode toggle ────────────────────────── */
+.mode-row {
+  border-top: none;
+  padding-top: 0;
+}
+
+.mode-toggle {
+  display: flex;
+  gap: 2px;
+  background: rgba(243, 239, 230, 0.1);
+  border: 1px solid var(--hairline);
+  border-radius: 2px;
+  padding: 2px;
+}
+
+.mode-toggle button {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  color: var(--paper-dim);
+  background: none;
+  border: none;
+  border-radius: 1px;
+  padding: 0.3rem 0;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.mode-toggle button:hover {
+  color: var(--paper);
+}
+
+.mode-toggle button.active {
+  background: var(--accent);
+  color: var(--ink);
+}
+
 .panel-row.muted {
   opacity: 0.38;
 }

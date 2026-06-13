@@ -175,6 +175,7 @@ async function main() {
     weights: Object.fromEntries(grid.meta.layers.map((l) => [l.id, 5])),
     solo: null,
     opacity: 0.72,
+    mode: 'mean',
   };
 
   // Solo temporarily zeroes every other weight (spec §8); the soloed layer's own
@@ -184,7 +185,7 @@ async function main() {
       ? state.weights
       : Object.fromEntries(grid.meta.layers.map((l) => [l.id, l.id === state.solo ? 1 : 0]));
 
-  let scored = computeScores(grid, effectiveWeights());
+  let scored = computeScores(grid, effectiveWeights(), state.mode);
 
   const updateStatus = () => {
     const active = state.solo
@@ -192,7 +193,7 @@ async function main() {
       : `${grid.meta.layers.filter((l) => state.weights[l.id] > 0).length}/${
           grid.meta.layers.length
         } layers active`;
-    status.textContent = `${grid.cellIds.length.toLocaleString()} cells · ${active} · ${grid.meta.generated.slice(0, 10)}`;
+    status.textContent = `${grid.cellIds.length.toLocaleString()} cells · ${active} · ${state.mode} · ${grid.meta.generated.slice(0, 10)}`;
   };
 
   map.addSource('grid', { type: 'geojson', data: buildGeoJSON(grid) });
@@ -234,7 +235,7 @@ async function main() {
 
   buildPanel(document.getElementById('panel')!, grid.meta.layers, state, {
     onScoringChange: rafThrottle(() => {
-      scored = computeScores(grid, effectiveWeights());
+      scored = computeScores(grid, effectiveWeights(), state.mode);
       applyFeatureState(map, grid, scored);
       updateStatus();
     }),
