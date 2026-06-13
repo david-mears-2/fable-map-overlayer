@@ -57,7 +57,9 @@ class _PointCollector(osmium.SimpleHandler):
             name: {k: set(vs) for k, vs in tags.items()} for name, tags in groups.items()
         }
         self.wkb_factory = osmium.geom.WKBFactory()
-        self.collected: dict[str, list] = {n: [] for n in groups}
+        # group -> list of (dedup key, point, tag). The key namespaces node vs area
+        # ids so the same venue appearing in several extracts collapses to one.
+        self.collected: dict[str, list[tuple[tuple, object, str]]] = {n: [] for n in groups}
 
     def _match(self, tags):
         for name, matcher in self.matchers.items():
@@ -70,8 +72,9 @@ class _PointCollector(osmium.SimpleHandler):
     def node(self, n: osmium.osm.Node) -> None:
         if not n.tags:
             return
+        pt = shapely.Point(n.location.lon, n.location.lat)
         for name, tag in self._match(n.tags):
-            self.collected[name].append((shapely.Point(n.location.lon, n.location.lat), tag))
+            self.collected[name].append((("n", n.id), pt, tag))
 
     def area(self, a: osmium.osm.Area) -> None:
         matched = list(self._match(a.tags))
@@ -81,22 +84,36 @@ class _PointCollector(osmium.SimpleHandler):
             geom = shapely.from_wkb(bytes.fromhex(self.wkb_factory.create_multipolygon(a)))
         except RuntimeError:
             return
+        centroid = shapely.centroid(geom)
         for name, tag in matched:
-            self.collected[name].append((shapely.centroid(geom), tag))
+            self.collected[name].append((("a", a.id), centroid, tag))
 
 
-def extract_points(pbf_path, groups: TagGroups) -> dict[str, gpd.GeoDataFrame]:
-    paths = {name: CACHE / f"osm_pts_{name}.parquet" for name in groups}
+def extract_points(pbf_paths, groups: TagGroups, cache_tag: str = "") -> dict[str, gpd.GeoDataFrame]:
+    """Extract tagged features as points from one or more PBF extracts.
+
+    Like extract_polygons, accepts several extracts and dedupes by namespaced OSM
+    id so a venue near a region boundary is not counted once per extract.
+    """
+    if isinstance(pbf_paths, (str, Path)):
+        pbf_paths = [pbf_paths]
+
+    paths = {name: CACHE / f"osm_pts_{name}{cache_tag}.parquet" for name in groups}
     missing = {name: tags for name, tags in groups.items() if not paths[name].exists()}
 
     if missing:
-        print(f"osm: parsing {pbf_path.name} for point groups: {', '.join(missing)}")
-        collector = _PointCollector(missing)
-        collector.apply_file(str(pbf_path), locations=True)
-        for name, rows in collector.collected.items():
+        collected: dict[str, dict[tuple, tuple]] = {n: {} for n in missing}
+        for pbf in pbf_paths:
+            print(f"osm: parsing {pbf.name} for point groups: {', '.join(missing)}")
+            collector = _PointCollector(missing)
+            collector.apply_file(str(pbf), locations=True)
+            for name, rows in collector.collected.items():
+                for key, pt, tag in rows:
+                    collected[name].setdefault(key, (pt, tag))
+        for name, items in collected.items():
             gdf = gpd.GeoDataFrame(
-                {"tag": [tag for _, tag in rows]},
-                geometry=[pt for pt, _ in rows],
+                {"tag": [tag for _, tag in items.values()]},
+                geometry=[pt for pt, _ in items.values()],
                 crs=WGS84,
             ).to_crs(BNG)
             gdf.to_parquet(paths[name])

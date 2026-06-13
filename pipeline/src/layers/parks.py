@@ -33,11 +33,19 @@ def main() -> None:
     parks = extract_polygons(pbfs, {"parks": cfg["include_tags"]}, cache_tag="_buffered")["parks"]
     region = gpd.read_file(BOUNDARY_PATH).to_crs(BNG).union_all().buffer(cutoff)
     parks = parks[parks.geometry.intersects(region)]
-    parks = parks[parks.geometry.area >= cfg["min_area_m2"]]
+
+    # Dissolve overlapping and adjacent polygons into discrete contiguous green
+    # spaces. OSM often maps the same ground under several tags (a nature reserve
+    # also tagged natural=wood); summing both would count that area twice. Dissolving
+    # also makes log(1 + area) apply to true contiguous area rather than to each
+    # arbitrarily-split piece.
+    geoms = shapely.get_parts(shapely.unary_union(parks.geometry.values))
+    areas = shapely.area(geoms)
+    geoms, areas = geoms[areas >= cfg["min_area_m2"]], areas[areas >= cfg["min_area_m2"]]
+    weights = np.log1p(areas / 10_000)  # log(1 + hectares), from true (unsimplified) area
     # ~10 m simplification: invisible against a 500 m decay, much cheaper distances.
-    geoms = shapely.simplify(parks.geometry.values, 10)
-    weights = np.log1p(shapely.area(geoms) / 10_000)  # log(1 + hectares)
-    print(f"parks: {len(geoms)} parks >= {cfg['min_area_m2']} m²")
+    geoms = shapely.simplify(geoms, 10)
+    print(f"parks: {len(geoms)} discrete green spaces >= {cfg['min_area_m2']} m²")
 
     tree = STRtree(centres)
     score = np.zeros(len(grid))

@@ -2,23 +2,31 @@
 cell centroid (spec §5). The circular window overlaps neighbouring cells, which
 removes checkerboard noise from point clusters straddling cell boundaries.
 """
+import geopandas as gpd
 import numpy as np
 import pandas as pd
 import shapely
 from shapely.strtree import STRtree
 
-from ..common import GRID_PATH, LAYERS_DIR, PBF_PATH, load_config
+from ..common import BNG, BOUNDARY_PATH, GRID_PATH, LAYERS_DIR, PBF_PATH, load_config, region_pbf
 
 
 def main() -> None:
     from ..osm import extract_points
 
-    cfg = load_config()["layers"]["restaurants"]
+    cfg_all = load_config()
+    cfg = cfg_all["layers"]["restaurants"]
     grid = pd.read_parquet(GRID_PATH)
     cell = 250
     centres = shapely.points(grid.easting.values + cell / 2, grid.northing.values + cell / 2)
 
-    venues = extract_points(PBF_PATH, {"restaurants": cfg["include_tags"]})["restaurants"]
+    # Source venues from London plus bordering extracts so edge cells count venues
+    # just across the boundary (the London extract is boundary-clipped). Clip to a
+    # radius buffer around London: venues farther out can reach no cell.
+    pbfs = [PBF_PATH] + [region_pbf(r) for r in cfg_all["osm"]["buffer_regions"]]
+    venues = extract_points(pbfs, {"restaurants": cfg["include_tags"]}, cache_tag="_buffered")["restaurants"]
+    region = gpd.read_file(BOUNDARY_PATH).to_crs(BNG).union_all().buffer(cfg["radius_m"])
+    venues = venues[venues.geometry.intersects(region)]
     print(f"restaurants: {len(venues)} venues ({venues.tag.value_counts().to_dict()})")
 
     tree = STRtree(venues.geometry.values)
