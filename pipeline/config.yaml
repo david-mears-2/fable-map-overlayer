@@ -1,0 +1,31 @@
+# Pipeline configuration (spec §9). Layers absent from `layers:` are not built.
+grid:
+  cell_size_m: 250
+  non_residential:
+    # A cell is non-residential only when it is completely covered by the land
+    # uses below (parks, water, industrial estates etc. — spec §3 "no housing
+    # stock"). Fractionally below 1 to absorb sliver/precision artefacts.
+    coverage_threshold: 0.99
+    tags:
+      natural: [water, heath, wetland, wood, scrub]
+      landuse:
+        [industrial, railway, farmland, meadow, forest, quarry, landfill,
+         military, brownfield, cemetery, allotments, reservoir, basin]
+      leisure: [park, recreation_ground, nature_reserve, common, golf_course]
+      aeroway: [aerodrome]
+
+layers:
+  parks:
+    enabled: true
+    decay_lambda_m: 500       # walking-scale exponential decay (spec §5)
+    cutoff_distance_m: 3000   # exp(-6) ≈ 0.2% — contributions beyond this are noise
+    min_area_m2: 2000         # drop slivers (verges, roundabout greens)
+    include_tags:
+      leisure: [park, recreation_ground, nature_reserve, common]
+      landuse: [recreation_ground, village_green]
+    cutoffs: {percentile: [2, 98]}
+
+validation:
+  cell_count: [15000, 40000]
+  residential_fraction: [0.4, 0.95]
+  max_null_rate: 0.3 # per layer, among residential cells

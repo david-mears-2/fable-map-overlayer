@@ -176,7 +176,7 @@ async function main() {
       : `${grid.meta.layers.filter((l) => state.weights[l.id] > 0).length}/${
           grid.meta.layers.length
         } layers active`;
-    status.textContent = `${grid.cellIds.length.toLocaleString()} cells · ${active} · dummy data`;
+    status.textContent = `${grid.cellIds.length.toLocaleString()} cells · ${active} · ${grid.meta.generated.slice(0, 10)}`;
   };
 
   map.addSource('grid', { type: 'geojson', data: buildGeoJSON(grid) });
